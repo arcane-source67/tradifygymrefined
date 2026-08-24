@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liquid Glass · Candlestick Scenario Simulator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['-apple-system','BlinkMacSystemFont','"Inter"','"Segoe UI"','ui-sans-serif','system-ui','sans-serif'],
+        },
+        colors: {
+          bull: '#3CFF9B',
+          bear: '#FF3E6C',
+          neutral: '#8FD8FF',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root{
+    --bull: #3CFF9B;
+    --bear: #FF3E6C;
+    --neutral: #8FD8FF;
+    --gold: #FFD166;
+  }
+  *{ -webkit-tap-highlight-color: transparent; }
+  html,body{ height:100%; }
+  body{
+    background: #05060b;
+    color: #eef2f7;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* ---------- Liquid background ---------- */
+  .bg-scene{
+    position:fixed; inset:0; z-index:0; overflow:hidden;
+    background:
+      radial-gradient(ellipse at 20% 15%, #0a0f1f 0%, #05060b 55%),
+      #05060b;
+  }
+  .blob{
+    position:absolute; border-radius:50%;
+    filter: blur(90px);
+    opacity:.55;
+    mix-blend-mode: screen;
+    will-change: transform, border-radius;
+  }
+  .blob-a{
+    width:52vw; height:52vw; left:-12vw; top:-14vw;
+    background: radial-gradient(circle at 30% 30%, #7c3aed, transparent 70%);
+    animation: drift1 26s ease-in-out infinite alternate;
+  }
+  .blob-b{
+    width:44vw; height:44vw; right:-10vw; top:6vw;
+    background: radial-gradient(circle at 60% 40%, #06b6d4, transparent 70%);
+    animation: drift2 32s ease-in-out infinite alternate;
+  }
+  .blob-c{
+    width:48vw; height:48vw; left:8vw; bottom:-20vw;
+    background: radial-gradient(circle at 50% 50%, #ec4899, transparent 70%);
+    animation: drift3 30s ease-in-out infinite alternate;
+  }
+  .blob-d{
+    width:36vw; height:36vw; right:6vw; bottom:-12vw;
+    background: radial-gradient(circle at 40% 60%, #1e3a8a, transparent 70%);
+    animation: drift4 24s ease-in-out infinite alternate;
+  }
+  @keyframes drift1{
+    0%{ transform: translate(0,0) scale(1); border-radius: 46% 54% 60% 40% / 50% 45% 55% 50%; }
+    50%{ transform: translate(6vw,4vw) scale(1.08); border-radius: 60% 40% 45% 55% / 40% 55% 45% 60%; }
+    100%{ transform: translate(-4vw,8vw) scale(0.96); border-radius: 40% 60% 55% 45% / 55% 45% 60% 40%; }
+  }
+  @keyframes drift2{
+    0%{ transform: translate(0,0) scale(1); border-radius: 55% 45% 40% 60% / 45% 55% 45% 55%; }
+    50%{ transform: translate(-5vw,6vw) scale(0.94); border-radius: 40% 60% 55% 45% / 60% 40% 55% 45%; }
+    100%{ transform: translate(3vw,-5vw) scale(1.06); border-radius: 60% 40% 45% 55% / 45% 55% 40% 60%; }
+  }
+  @keyframes drift3{
+    0%{ transform: translate(0,0) scale(1); }
+    50%{ transform: translate(4vw,-6vw) scale(1.1); }
+    100%{ transform: translate(-6vw,-2vw) scale(0.95); }
+  }
+  @keyframes drift4{
+    0%{ transform: translate(0,0) scale(1); }
+    50%{ transform: translate(-4vw,-4vw) scale(1.05); }
+    100%{ transform: translate(5vw,3vw) scale(0.92); }
+  }
+  .grain{
+    position:absolute; inset:0;
+    background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity:.5;
+  }
+  .vignette{
+    position:absolute; inset:0;
+    box-shadow: inset 0 0 18vw 4vw #05060b;
+  }
+
+  /* ---------- Glass ---------- */
+  .glass{
+    background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      0 20px 60px -20px rgba(0,0,0,0.7),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 0 40px rgba(255,255,255,0.02);
+  }
+  .glass-tight{
+    background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.09);
+  }
+  .fluid{
+    transition: all 500ms cubic-bezier(0.25,1,0.5,1);
+  }
+
+  .glow-text-bull{ color: var(--bull); text-shadow: 0 0 10px rgba(60,255,155,.65), 0 0 26px rgba(60,255,155,.35); }
+  .glow-text-bear{ color: var(--bear); text-shadow: 0 0 10px rgba(255,62,108,.65), 0 0 26px rgba(255,62,108,.35); }
+  .glow-text-neutral{ color: var(--neutral); text-shadow: 0 0 10px rgba(143,216,255,.6), 0 0 24px rgba(143,216,255,.3); }
+  .glow-text-gold{ color: var(--gold); text-shadow: 0 0 10px rgba(255,209,102,.55), 0 0 22px rgba(255,209,102,.3); }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    position: relative;
+    isolation: isolate;
+    transition: all 500ms cubic-bezier(0.25,1,0.5,1);
+  }
+  .btn:active{ transform: scale(0.96); }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; filter: grayscale(0.4); }
+  .btn-buy{
+    background: linear-gradient(160deg, rgba(60,255,155,0.22), rgba(60,255,155,0.05));
+    border: 1px solid rgba(60,255,155,0.45);
+    box-shadow: 0 0 0 rgba(60,255,155,0);
+  }
+  .btn-buy:not(:disabled):hover{
+    box-shadow: 0 10px 34px -8px rgba(60,255,155,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+    transform: translateY(-2px);
+  }
+  .btn-sell{
+    background: linear-gradient(160deg, rgba(255,62,108,0.22), rgba(255,62,108,0.05));
+    border: 1px solid rgba(255,62,108,0.45);
+  }
+  .btn-sell:not(:disabled):hover{
+    box-shadow: 0 10px 34px -8px rgba(255,62,108,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+    transform: translateY(-2px);
+  }
+  .btn-hold{
+    background: linear-gradient(160deg, rgba(143,216,255,0.20), rgba(143,216,255,0.04));
+    border: 1px solid rgba(143,216,255,0.4);
+  }
+  .btn-hold:not(:disabled):hover{
+    box-shadow: 0 10px 34px -8px rgba(143,216,255,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+    transform: translateY(-2px);
+  }
+  .btn-primary{
+    background: linear-gradient(160deg, rgba(255,209,102,0.24), rgba(255,209,102,0.05));
+    border: 1px solid rgba(255,209,102,0.5);
+  }
+  .btn-primary:not(:disabled):hover{
+    box-shadow: 0 10px 34px -8px rgba(255,209,102,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+    transform: translateY(-2px);
+  }
+  .btn-primary.pulse{ animation: pulseGlow 1.6s ease-in-out infinite; }
+  @keyframes pulseGlow{
+    0%,100%{ box-shadow: 0 0 0 rgba(255,209,102,0.0); }
+    50%{ box-shadow: 0 0 28px 2px rgba(255,209,102,0.45); }
+  }
+
+  .chip{
+    transition: all 400ms cubic-bezier(0.25,1,0.5,1);
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.03);
+  }
+  .chip.active{
+    background: linear-gradient(160deg, rgba(143,216,255,0.22), rgba(143,216,255,0.06));
+    border-color: rgba(143,216,255,0.55);
+    box-shadow: 0 8px 24px -10px rgba(143,216,255,0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  .chip:hover{ border-color: rgba(255,255,255,0.25); }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.15); border-radius:8px; }
+
+  .fade-slide-enter{ animation: fadeSlideIn 550ms cubic-bezier(0.25,1,0.5,1) both; }
+  @keyframes fadeSlideIn{
+    from{ opacity:0; transform: translateY(14px) scale(0.98); }
+    to{ opacity:1; transform: translateY(0) scale(1); }
+  }
+  .pop-in{ animation: popIn 420ms cubic-bezier(0.25,1,0.5,1) both; }
+  @keyframes popIn{
+    0%{ opacity:0; transform: scale(0.9) translateY(8px); }
+    60%{ opacity:1; transform: scale(1.02) translateY(-1px); }
+    100%{ opacity:1; transform: scale(1) translateY(0); }
+  }
+
+  #screen-prefs, #screen-sim{ transition: opacity 500ms cubic-bezier(0.25,1,0.5,1), transform 500ms cubic-bezier(0.25,1,0.5,1); }
+
+  canvas{ display:block; width:100%; height:100%; }
+
+  .badge-dot{ box-shadow: 0 0 8px currentColor; }
+
+  @media (prefers-reduced-motion: reduce){
+    .blob{ animation: none !important; }
+    .fluid, .btn, .fade-slide-enter, .pop-in{ transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body class="font-sans antialiased min-h-screen">
+
+  <div class="bg-scene">
+    <div class="blob blob-a"></div>
+    <div class="blob blob-b"></div>
+    <div class="blob blob-c"></div>
+    <div class="blob blob-d"></div>
+    <div class="grain"></div>
+    <div class="vignette"></div>
+  </div>
+
+  <main class="relative z-10 min-h-screen w-full flex flex-col items-center px-4 py-8 sm:py-12">
+
+    <!-- Header -->
+    <div class="w-full max-w-6xl flex items-center justify-between mb-8">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-2xl glass-tight flex items-center justify-center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 18L9 11L13 15L20 6" stroke="#8FD8FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <h1 class="text-[15px] sm:text-base font-semibold tracking-tight text-white/90">Candlestick Scenario Simulator</h1>
+          <p class="text-[11px] text-white/40 -mt-0.5">Liquid Glass · Practice Trading Reads</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap justify-end">
+        <div id="wallet-pill" class="glass-tight rounded-full px-4 py-2 hidden items-center gap-2 text-xs text-white/70">
+          <span id="rank-dot" class="w-1.5 h-1.5 rounded-full bg-[--gold] badge-dot"></span>
+          <span id="balance-text" class="font-semibold text-white/90">🪙 0</span>
+          <span class="text-white/25">·</span>
+          <span id="rank-text" class="glow-text-gold font-medium">Midvester</span>
+        </div>
+        <div id="score-pill" class="glass-tight rounded-full px-4 py-2 hidden sm:flex items-center gap-2 text-xs text-white/70">
+          <span class="w-1.5 h-1.5 rounded-full bg-[--neutral] badge-dot"></span>
+          <span id="score-text">Accuracy 0 / 0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PREFERENCES SCREEN -->
+    <section id="screen-prefs" class="w-full max-w-2xl fade-slide-enter">
+      <div class="glass rounded-[28px] p-6 sm:p-9">
+        <h2 class="text-xl sm:text-2xl font-semibold text-white/95 tracking-tight">Set up your scenario</h2>
+        <p class="text-sm text-white/45 mt-1.5 mb-7">Choose a market condition and difficulty. We'll generate a fresh, randomized candle sequence every time.</p>
+
+        <div class="mb-6">
+          <div class="text-[11px] uppercase tracking-wider text-white/40 mb-2.5">Trend</div>
+          <div class="grid grid-cols-3 gap-2.5" id="group-trend">
+            <button data-group="trend" data-value="up" class="chip rounded-2xl py-3 text-sm font-medium">Uptrend</button>
+            <button data-group="trend" data-value="down" class="chip rounded-2xl py-3 text-sm font-medium">Downtrend</button>
+            <button data-group="trend" data-value="choppy" class="chip rounded-2xl py-3 text-sm font-medium">Choppy</button>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <div class="text-[11px] uppercase tracking-wider text-white/40 mb-2.5">Timeframe</div>
+          <div class="grid grid-cols-4 gap-2.5" id="group-timeframe">
+            <button data-group="timeframe" data-value="1m" class="chip rounded-2xl py-3 text-sm font-medium">1m</button>
+            <button data-group="timeframe" data-value="5m" class="chip rounded-2xl py-3 text-sm font-medium">5m</button>
+            <button data-group="timeframe" data-value="1H" class="chip rounded-2xl py-3 text-sm font-medium">1H</button>
+            <button data-group="timeframe" data-value="1D" class="chip rounded-2xl py-3 text-sm font-medium">1D</button>
+          </div>
+        </div>
+
+        <div class="mb-9">
+          <div class="text-[11px] uppercase tracking-wider text-white/40 mb-2.5">Complexity</div>
+          <div class="grid grid-cols-3 gap-2.5" id="group-complexity">
+            <button data-group="complexity" data-value="simple" class="chip rounded-2xl py-3 text-sm font-medium">Simple</button>
+            <button data-group="complexity" data-value="medium" class="chip rounded-2xl py-3 text-sm font-medium">Medium</button>
+            <button data-group="complexity" data-value="complex" class="chip rounded-2xl py-3 text-sm font-medium">Complex</button>
+          </div>
+        </div>
+
+        <div class="mb-9">
+          <div class="text-[11px] uppercase tracking-wider text-white/40 mb-2.5">Starting Capital</div>
+          <div class="grid grid-cols-3 gap-2.5" id="group-capital">
+            <button data-group="capital" data-value="100" class="chip rounded-2xl py-3 text-sm font-medium">🪙 100</button>
+            <button data-group="capital" data-value="250" class="chip rounded-2xl py-3 text-sm font-medium">🪙 250</button>
+            <button data-group="capital" data-value="500" class="chip rounded-2xl py-3 text-sm font-medium">🪙 500</button>
+            <button data-group="capital" data-value="750" class="chip rounded-2xl py-3 text-sm font-medium">🪙 750</button>
+            <button data-group="capital" data-value="1000" class="chip rounded-2xl py-3 text-sm font-medium">🪙 1,000</button>
+          </div>
+        </div>
+
+        <button id="btn-start" class="btn btn-primary w-full rounded-2xl py-3.5 text-sm font-semibold tracking-wide text-[#FFE9B3]">
+          Begin Simulation
+        </button>
+      </div>
+    </section>
+
+    <!-- SIMULATOR SCREEN -->
+    <section id="screen-sim" class="w-full max-w-6xl hidden opacity-0">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <!-- Chart -->
+        <div class="lg:col-span-2 glass rounded-[28px] p-4 sm:p-6 flex flex-col">
+          <div class="flex items-center justify-between mb-3 px-1">
+            <div class="flex items-center gap-2 text-xs text-white/50">
+              <span id="tag-trend" class="glass-tight rounded-full px-3 py-1"></span>
+              <span id="tag-timeframe" class="glass-tight rounded-full px-3 py-1"></span>
+              <span id="tag-complexity" class="glass-tight rounded-full px-3 py-1"></span>
+            </div>
+            <button id="btn-restart" class="text-xs text-white/40 hover:text-white/70 transition-colors duration-300">Restart</button>
+          </div>
+          <div class="relative w-full grow rounded-2xl overflow-hidden" style="height:360px;">
+            <canvas id="chart"></canvas>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-3 mt-4 px-1">
+            <div id="hint" class="text-xs text-white/40">Reveal a few candles to get oriented.</div>
+            <div class="flex items-center gap-2.5">
+              <div class="glass-tight rounded-xl flex items-center gap-1 p-1">
+                <button id="btn-batch-dec" aria-label="Decrease reveal size" class="btn w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white/90 hover:bg-white/5 text-base leading-none">−</button>
+                <div class="px-2 text-[11px] text-white/45 leading-tight text-center select-none">
+                  Reveal<br><span id="batch-size-label" class="text-white/85 font-semibold text-sm">5</span>
+                </div>
+                <button id="btn-batch-inc" aria-label="Increase reveal size" class="btn w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white/90 hover:bg-white/5 text-base leading-none">+</button>
+              </div>
+              <button id="btn-next" class="btn btn-primary rounded-2xl px-6 py-2.5 text-sm font-semibold text-[#FFE9B3] whitespace-nowrap">Reveal Next 5</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trade panel -->
+        <div class="glass rounded-[28px] p-5 sm:p-6 flex flex-col">
+          <h3 class="text-sm font-semibold text-white/80 mb-1">What happens next?</h3>
+          <p class="text-xs text-white/40 mb-4">Predict the trend of the next 5 candles before they're revealed.</p>
+
+          <div class="glass-tight rounded-2xl p-3.5 mb-4">
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-[11px] uppercase tracking-wider text-white/40">Invest</span>
+              <span id="invest-amount-label" class="text-sm font-semibold glow-text-gold">🪙 0</span>
+            </div>
+            <div class="flex items-center gap-2 mb-2.5">
+              <button id="btn-invest-dec" class="btn w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white/90 hover:bg-white/5 text-base leading-none border border-white/10">−</button>
+              <div class="flex-1 h-2 rounded-full bg-white/10 relative overflow-hidden">
+                <div id="invest-bar" class="h-full rounded-full fluid" style="width:0%; background: linear-gradient(90deg, var(--gold), var(--bull));"></div>
+              </div>
+              <button id="btn-invest-inc" class="btn w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white/90 hover:bg-white/5 text-base leading-none border border-white/10">+</button>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5" id="invest-presets">
+              <button data-pct="0.25" class="chip rounded-lg py-1.5 text-[11px]">25%</button>
+              <button data-pct="0.5" class="chip rounded-lg py-1.5 text-[11px]">50%</button>
+              <button data-pct="0.75" class="chip rounded-lg py-1.5 text-[11px]">75%</button>
+              <button data-pct="1" class="chip rounded-lg py-1.5 text-[11px]">MAX</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 mb-5">
+            <button id="btn-buy" data-decision="buy" class="btn btn-buy rounded-2xl py-3.5 flex items-center justify-center gap-2 font-semibold">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="#3CFF9B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="glow-text-bull">BUY</span>
+            </button>
+            <button id="btn-sell" data-decision="sell" class="btn btn-sell rounded-2xl py-3.5 flex items-center justify-center gap-2 font-semibold">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="#FF3E6C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="glow-text-bear">SELL</span>
+            </button>
+            <button id="btn-hold" data-decision="hold" class="btn btn-hold rounded-2xl py-3.5 flex items-center justify-center gap-2 font-semibold">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="12" r="1.8" fill="#8FD8FF"/><circle cx="12" cy="12" r="1.8" fill="#8FD8FF"/><circle cx="18" cy="12" r="1.8" fill="#8FD8FF"/></svg>
+              <span class="glow-text-neutral">HOLD</span>
+            </button>
+          </div>
+
+          <div id="decision-tag" class="hidden fluid flex items-center justify-center gap-2 text-xs text-center text-white/50 mb-3">
+            <span id="decision-tag-text">Locked in — tap <span class="text-white/80 font-medium">Next Candle</span> to reveal</span>
+            <button id="btn-change-decision" class="glass-tight rounded-full px-2.5 py-1 text-[11px] text-white/60 hover:text-white/90 hover:border-white/25 transition-colors duration-300">Change</button>
+          </div>
+
+          <div id="feedback-wrap" class="grow flex flex-col justify-end">
+            <div id="feedback-placeholder" class="text-xs text-white/30 text-center py-10 border border-dashed border-white/10 rounded-2xl">
+              Your Pro Tip feedback will appear here after each reveal.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= Audio synthesis ================= */
+  let actx = null;
+  function ctx(){
+    if(!actx){ actx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if(actx.state === 'suspended'){ actx.resume(); }
+    return actx;
+  }
+  function envGain(ac, t0, peak, attack, decay){
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+    return g;
+  }
+  function playClick(){
+    try{
+      const ac = ctx(); const t0 = ac.currentTime;
+      const osc = ac.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(2600, t0);
+      osc.frequency.exponentialRampToValueAtTime(1200, t0+0.045);
+      const g = envGain(ac, t0, 0.05, 0.002, 0.05);
+      osc.connect(g).connect(ac.destination);
+      osc.start(t0); osc.stop(t0+0.07);
+    }catch(e){}
+  }
+  function playPop(){
+    try{
+      const ac = ctx(); const t0 = ac.currentTime;
+      const osc = ac.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(900, t0);
+      osc.frequency.exponentialRampToValueAtTime(280, t0+0.09);
+      const g = envGain(ac, t0, 0.09, 0.003, 0.09);
+      osc.connect(g).connect(ac.destination);
+      osc.start(t0); osc.stop(t0+0.12);
+
+      const osc2 = ac.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1800, t0);
+      const g2 = envGain(ac, t0, 0.03, 0.001, 0.03);
+      osc2.connect(g2).connect(ac.destination);
+      osc2.start(t0); osc2.stop(t0+0.04);
+    }catch(e){}
+  }
+  function playChime(){
+    try{
+      const ac = ctx(); const t0 = ac.currentTime;
+      const freqs = [523.25, 659.25, 783.99, 1046.5];
+      freqs.forEach((f,i)=>{
+        const osc = ac.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t0 + i*0.02);
+        const g = envGain(ac, t0 + i*0.02, 0.075, 0.01, 0.62);
+        osc.connect(g).connect(ac.destination);
+        osc.start(t0 + i*0.02); osc.stop(t0 + i*0.02 + 0.7);
+      });
+    }catch(e){}
+  }
+  function playThud(){
+    try{
+      const ac = ctx(); const t0 = ac.currentTime;
+      const osc = ac.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(160, t0);
+      osc.frequency.exponentialRampToValueAtTime(60, t0+0.28);
+      const g = envGain(ac, t0, 0.16, 0.005, 0.32);
+      osc.connect(g).connect(ac.destination);
+      osc.start(t0); osc.stop(t0+0.35);
+
+      const bufSize = ac.sampleRate * 0.2;
+      const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for(let i=0;i<bufSize;i++){ data[i] = (Math.random()*2-1) * (1 - i/bufSize); }
+      const noise = ac.createBufferSource(); noise.buffer = buf;
+      const nf = ac.createBiquadFilter(); nf.type='lowpass'; nf.frequency.value=300;
+      const ng = envGain(ac, t0, 0.05, 0.001, 0.18);
+      noise.connect(nf).connect(ng).connect(ac.destination);
+      noise.start(t0);
+    }catch(e){}
+  }
+
+  function playRankUp(){
+    try{
+      const ac = ctx(); const t0 = ac.currentTime;
+      const freqs = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+      freqs.forEach((f,i)=>{
+        const osc = ac.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t0 + i*0.055);
+        const g = envGain(ac, t0 + i*0.055, 0.08, 0.008, 0.4);
+        osc.connect(g).connect(ac.destination);
+        osc.start(t0 + i*0.055); osc.stop(t0 + i*0.055 + 0.45);
+      });
+    }catch(e){}
+  }
+  function playRankDown(){
+    try{
+      const ac = ctx(); const t0 = ac.currentTime;
+      const freqs = [400, 300, 220];
+      freqs.forEach((f,i)=>{
+        const osc = ac.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(f, t0 + i*0.09);
+        const g = envGain(ac, t0 + i*0.09, 0.06, 0.004, 0.16);
+        osc.connect(g).connect(ac.destination);
+        osc.start(t0 + i*0.09); osc.stop(t0 + i*0.09 + 0.2);
+      });
+    }catch(e){}
+  }
+
+  /* ================= State ================= */
+  const prefs = { trend:'up', timeframe:'1H', complexity:'medium', capital:250 };
+  const MIN_BATCH = 5, MAX_BATCH = 50, BATCH_STEP = 5;
+  const POOL_SIZE = 200; // generous pre-generated pool so even repeated 50-candle reveals have room
+
+  const INVEST_STEP_MAP = { 100:5, 250:10, 500:25, 750:25, 1000:50 };
+
+  const RANKS = ['Assvester','Neutravester','Midvester','Profivester','Phenovester','Godlike','Legend','BTCMASTER'];
+  // multiplier of (balance / starting capital) required to reach each rank
+  const RANK_THRESHOLDS = [0, 0.5, 0.9, 1.5, 2.5, 4, 6, 10];
+  function rankIndexFor(balance, capital){
+    const mult = capital > 0 ? balance / capital : 0;
+    let idx = 0;
+    for(let i=0;i<RANK_THRESHOLDS.length;i++){
+      if(mult >= RANK_THRESHOLDS[i]) idx = i;
+    }
+    return idx;
+  }
+
+  const state = {
+    candles: [],
+    revealed: 0,
+    phase: 'context', // context | await-decision | await-next | finished
+    decision: null,
+    score: { correct:0, total:0 },
+    animT0: 0,
+    animating: false,
+    animDuration: 300,
+    stagger: 70,
+    batchBusy: false,
+    revealAmount: MIN_BATCH,
+    lastBatchCount: 0,
+    capital: 250,
+    balance: 250,
+    investStep: 10,
+    investAmount: 0,
+    lockedInvest: 0,
+    rankIndex: 2,
+  };
+
+  /* ================= Data generation ================= */
+  function gaussian(){
+    let u=0,v=0;
+    while(u===0) u = Math.random();
+    while(v===0) v = Math.random();
+    return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+  }
+
+  function generateCandles(trend, complexity, count){
+    const volMap = { simple:0.0045, medium:0.009, complex:0.017 };
+    const vol = volMap[complexity] || 0.009;
+    const driftMap = { up:0.0032, down:-0.0032, choppy:0.0 };
+    const drift = driftMap[trend] || 0;
+    const startPrice = 80 + Math.random()*120;
+    let last = startPrice;
+    const candles = [];
+    for(let i=0;i<count;i++){
+      let gap = 0;
+      if(complexity === 'complex' && Math.random() < 0.18){
+        gap = gaussian() * vol * 0.6;
+      }
+      const open = last * (1+gap);
+      let reversion = 0;
+      if(trend === 'choppy'){
+        reversion = (startPrice - open) / startPrice * 0.14;
+      }
+      const noise = gaussian() * vol;
+      const change = drift + reversion + noise;
+      let close = open * (1 + change);
+      if(close <= 0.5) close = open * 0.98;
+      const bodyHigh = Math.max(open, close);
+      const bodyLow = Math.min(open, close);
+      const wickUp = Math.abs(gaussian()) * vol * 0.7 * open;
+      const wickDown = Math.abs(gaussian()) * vol * 0.7 * open;
+      const high = bodyHigh + wickUp;
+      const low = Math.max(0.1, bodyLow - wickDown);
+      candles.push({ open, close, high, low });
+      last = close;
+    }
+    return candles;
+  }
+
+  function summarizeBatch(candles){
+    const first = candles[0], last = candles[candles.length-1];
+    const netPct = (last.close - first.open) / first.open;
+    const bullCount = candles.filter(c => c.close >= c.open).length;
+    const bearCount = candles.length - bullCount;
+    const high = Math.max(...candles.map(c => c.high));
+    const low = Math.min(...candles.map(c => c.low));
+    const rangePct = (high - low) / first.open;
+    return { netPct, bullCount, bearCount, high, low, rangePct, count: candles.length };
+  }
+
+  function classifyBatch(summary, complexity){
+    const volMap = { simple:0.0045, medium:0.009, complex:0.017 };
+    const vol = volMap[complexity] || 0.009;
+    const threshold = vol * 0.9;
+    if(Math.abs(summary.netPct) < threshold) return 'hold';
+    return summary.netPct > 0 ? 'buy' : 'sell';
+  }
+
+  /* ================= Pro Tips ================= */
+  function pct(n){ return (Math.abs(n)*100).toFixed(2) + '%'; }
+
+  function buildTip(decision, actual, summary){
+    const { netPct, bullCount, bearCount, rangePct, count } = summary;
+    const majority = Math.max(bullCount, bearCount);
+    const correct = decision === actual;
+
+    const lib = {
+      buy: {
+        correct: [
+          `Good read. The last ${count} candles gained ${pct(netPct)} net, with ${bullCount} of ${count} closing bullish — trend confirmed.`,
+          `Nice call. Buyers stayed in control across the stretch, up ${pct(netPct)} net over ${count} candles.`
+        ],
+        incorrect: [
+          `The stretch actually slipped ${pct(netPct)} net, with ${bearCount} of ${count} candles closing bearish — the uptrend read didn't hold.`,
+          `Momentum flipped instead, down ${pct(netPct)} over ${count} candles. Worth waiting for more bullish candles to agree before buying.`
+        ]
+      },
+      sell: {
+        correct: [
+          `Sharp read — the last ${count} candles lost ${pct(netPct)} net, with ${bearCount} of ${count} closing bearish. Bearish pressure confirmed.`,
+          `Good instinct. Sellers dominated the stretch, down ${pct(netPct)} net over ${count} candles.`
+        ],
+        incorrect: [
+          `Price actually gained ${pct(netPct)} net, with ${bullCount} of ${count} candles closing bullish — buyers stepped back in.`,
+          `The stretch pushed up ${pct(netPct)} instead. A reminder to wait for the majority of candles to agree before selling.`
+        ]
+      },
+      hold: {
+        correct: [
+          `Smart patience — net move was just ${pct(netPct)} across ${count} candles, a real ${bullCount}-${bearCount} split with no clear edge.`,
+          `Correct read. Choppy ${pct(rangePct)} range with no follow-through — a classic no-trade stretch.`
+        ],
+        incorrect: [
+          `Actually a decisive stretch — net ${pct(netPct)} move with ${majority} of ${count} candles agreeing on direction. Standing aside meant missing it.`,
+          `The market picked a side here, moving ${pct(netPct)} net over ${count} candles — more conviction than the setup first suggested.`
+        ]
+      }
+    };
+    const pool = lib[decision][correct ? 'correct' : 'incorrect'];
+    const text = pool[Math.floor(Math.random()*pool.length)];
+    const titleMap = { buy:'BUY', sell:'SELL', hold:'HOLD' };
+    return {
+      correct,
+      title: correct ? `${titleMap[decision]} confirmed` : `${titleMap[decision]} missed`,
+      text
+    };
+  }
+
+  /* ================= Canvas chart ================= */
+  const canvas = document.getElementById('chart');
+  const cctx = canvas.getContext('2d');
+  let dpr = Math.max(1, window.devicePixelRatio || 1);
+
+  function resizeCanvas(){
+    const rect = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    drawChart();
+  }
+  window.addEventListener('resize', resizeCanvas);
+  // extra safety net: catches size changes from the hide/show transition,
+  // font loading, or layout shifts that a plain resize listener would miss
+  if('ResizeObserver' in window){
+    new ResizeObserver(()=>{ if(!screenSim.classList.contains('hidden')) resizeCanvas(); })
+      .observe(canvas.parentElement);
+  }
+
+  // Auto-scales to whatever is currently revealed, so candle width and the
+  // price axis both adapt as the user reveals bigger or smaller batches.
+  function computeVisibleRange(){
+    let min = Infinity, max = -Infinity;
+    for(let i=0;i<state.revealed;i++){
+      const c = state.candles[i];
+      min = Math.min(min, c.low);
+      max = Math.max(max, c.high);
+    }
+    if(!isFinite(min)){ min = 0; max = 1; }
+    const pad = (max-min) * 0.12 || 1;
+    return { min: min-pad, max: max+pad };
+  }
+
+  function drawChart(){
+    const W = canvas.width, H = canvas.height;
+    cctx.clearRect(0,0,W,H);
+    if(state.candles.length === 0 || state.revealed === 0) return;
+
+    const total = state.revealed;
+    const marginL = 8*dpr, marginR = 54*dpr, marginT = 14*dpr, marginB = 14*dpr;
+    const chartW = W - marginL - marginR;
+    const chartH = H - marginT - marginB;
+    const slot = chartW / total;
+    const bodyW = Math.max(2*dpr, Math.min(slot * 0.6, 26*dpr));
+
+    const { min, max } = computeVisibleRange();
+    const yFor = (p) => marginT + chartH * (1 - (p - min) / (max - min));
+
+    // grid
+    cctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    cctx.lineWidth = 1*dpr;
+    cctx.font = `${11*dpr}px -apple-system, sans-serif`;
+    cctx.fillStyle = 'rgba(255,255,255,0.32)';
+    const gridLines = 5;
+    for(let i=0;i<=gridLines;i++){
+      const p = min + (max-min) * (i/gridLines);
+      const y = yFor(p);
+      cctx.beginPath();
+      cctx.moveTo(marginL, y);
+      cctx.lineTo(marginL+chartW, y);
+      cctx.stroke();
+      cctx.fillText(p.toFixed(2), marginL+chartW+8*dpr, y+4*dpr);
+    }
+
+    const now = performance.now();
+    let animProgress = 1;
+    if(state.animating){
+      const elapsed = now - state.animT0;
+      animProgress = Math.min(1, elapsed / (state.animDuration || BASE_ANIM_MS));
+    }
+    const easeOutCubic = (t) => 1 - Math.pow(1-t, 3);
+
+    for(let i=0;i<state.revealed;i++){
+      const c = state.candles[i];
+      const isLast = (i === state.revealed - 1);
+      const cx = marginL + slot*i + slot/2;
+
+      let open=c.open, close=c.close, high=c.high, low=c.low;
+      if(isLast && state.animating){
+        const e = easeOutCubic(animProgress);
+        close = open + (c.close - open) * e;
+        const bTop0 = Math.max(open, close);
+        const bBot0 = Math.min(open, close);
+        high = bTop0 + (c.high - Math.max(c.open,c.close)) * e;
+        low = bBot0 - (Math.min(c.open,c.close) - c.low) * e;
+      }
+
+      const bull = close >= open;
+      const color = bull ? '#3CFF9B' : '#FF3E6C';
+      const bodyTop = yFor(Math.max(open,close));
+      const bodyBot = yFor(Math.min(open,close));
+      const wickTop = yFor(high);
+      const wickBot = yFor(low);
+
+      cctx.save();
+      cctx.shadowColor = color;
+      cctx.shadowBlur = 14*dpr;
+      cctx.strokeStyle = color;
+      cctx.lineWidth = Math.max(1.4*dpr, bodyW*0.12);
+      cctx.beginPath();
+      cctx.moveTo(cx, wickTop);
+      cctx.lineTo(cx, wickBot);
+      cctx.stroke();
+
+      cctx.fillStyle = color;
+      const h = Math.max(2*dpr, bodyBot - bodyTop);
+      const r = Math.min(4*dpr, bodyW/2);
+      roundRect(cctx, cx - bodyW/2, bodyTop, bodyW, h, r);
+      cctx.globalAlpha = 0.92;
+      cctx.fill();
+      cctx.restore();
+    }
+
+    if(state.animating && animProgress < 1){
+      requestAnimationFrame(drawChart);
+    } else if(state.animating){
+      state.animating = false;
+      if(state._onAnimEnd){ const cb = state._onAnimEnd; state._onAnimEnd=null; cb(); }
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y, x+w, y+h, r);
+    c.arcTo(x+w, y+h, x, y+h, r);
+    c.arcTo(x, y+h, x, y, r);
+    c.arcTo(x, y, x+w, y, r);
+    c.closePath();
+  }
+
+  /* ================= UI wiring ================= */
+  const groupEls = document.querySelectorAll('[data-group]');
+  groupEls.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const group = btn.dataset.group;
+      const value = btn.dataset.value;
+      prefs[group] = group === 'capital' ? parseInt(value, 10) : value;
+      document.querySelectorAll(`[data-group="${group}"]`).forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      playClick();
+    });
+  });
+  // default selections
+  document.querySelector('[data-group="trend"][data-value="up"]').classList.add('active');
+  document.querySelector('[data-group="timeframe"][data-value="1H"]').classList.add('active');
+  document.querySelector('[data-group="complexity"][data-value="medium"]').classList.add('active');
+  document.querySelector('[data-group="capital"][data-value="250"]').classList.add('active');
+
+  const screenPrefs = document.getElementById('screen-prefs');
+  const screenSim = document.getElementById('screen-sim');
+  const btnStart = document.getElementById('btn-start');
+  const btnRestart = document.getElementById('btn-restart');
+  const btnNext = document.getElementById('btn-next');
+  const btnBatchDec = document.getElementById('btn-batch-dec');
+  const btnBatchInc = document.getElementById('btn-batch-inc');
+  const batchLabel = document.getElementById('batch-size-label');
+  const btnBuy = document.getElementById('btn-buy');
+  const btnSell = document.getElementById('btn-sell');
+  const btnHold = document.getElementById('btn-hold');
+  const decisionTag = document.getElementById('decision-tag');
+  const decisionTagText = document.getElementById('decision-tag-text');
+  const btnChangeDecision = document.getElementById('btn-change-decision');
+  const feedbackWrap = document.getElementById('feedback-wrap');
+  const feedbackPlaceholder = document.getElementById('feedback-placeholder');
+  const hint = document.getElementById('hint');
+  const scorePill = document.getElementById('score-pill');
+  const scoreText = document.getElementById('score-text');
+  const walletPill = document.getElementById('wallet-pill');
+  const balanceText = document.getElementById('balance-text');
+  const rankText = document.getElementById('rank-text');
+  const rankDot = document.getElementById('rank-dot');
+  const investLabel = document.getElementById('invest-amount-label');
+  const investBar = document.getElementById('invest-bar');
+  const btnInvestDec = document.getElementById('btn-invest-dec');
+  const btnInvestInc = document.getElementById('btn-invest-inc');
+  const investPresets = document.getElementById('invest-presets');
+
+  const trendLabels = { up:'Uptrend', down:'Downtrend', choppy:'Choppy' };
+  const complexityLabels = { simple:'Simple', medium:'Medium', complex:'Complex' };
+
+  function setTradeButtonsEnabled(enabled){
+    [btnBuy, btnSell, btnHold].forEach(b => b.disabled = !enabled);
+  }
+
+  function clampInvest(v){
+    const step = state.investStep || 5;
+    let n = Math.round(v / step) * step;
+    n = Math.max(step, Math.min(state.balance, n));
+    if(state.balance <= 0) n = 0;
+    return n;
+  }
+
+  function updateInvestControls(){
+    const editable = state.phase === 'await-decision' && state.balance > 0;
+    investLabel.textContent = `🪙 ${state.investAmount}`;
+    investBar.style.width = state.balance > 0 ? `${Math.min(100, (state.investAmount/state.balance)*100)}%` : '0%';
+    btnInvestDec.disabled = !editable || state.investAmount <= state.investStep;
+    btnInvestInc.disabled = !editable || state.investAmount >= state.balance;
+    investPresets.querySelectorAll('button').forEach(b => b.disabled = !editable);
+  }
+
+  function updateWalletPill(){
+    balanceText.textContent = `🪙 ${state.balance}`;
+    rankText.textContent = RANKS[state.rankIndex];
+    const rankColorClass = state.rankIndex >= 6 ? 'glow-text-bull' : state.rankIndex <= 1 ? 'glow-text-bear' : 'glow-text-gold';
+    rankText.className = `${rankColorClass} font-medium`;
+    rankDot.style.background = state.rankIndex >= 6 ? 'var(--bull)' : state.rankIndex <= 1 ? 'var(--bear)' : 'var(--gold)';
+    walletPill.classList.remove('hidden');
+    walletPill.classList.add('flex');
+  }
+
+  function updateNextButton(){
+    const readyForContext = state.phase === 'context';
+    const readyAfterDecision = state.phase === 'await-next';
+    btnNext.disabled = state.batchBusy || !(readyForContext || readyAfterDecision);
+    btnNext.classList.toggle('pulse', readyAfterDecision && !state.batchBusy);
+    const remaining = state.candles.length ? state.candles.length - state.revealed : state.revealAmount;
+    const amount = Math.min(state.revealAmount, Math.max(remaining, 0)) || state.revealAmount;
+    btnNext.textContent = `Reveal Next ${amount}`;
+  }
+
+  function updateBatchControls(){
+    batchLabel.textContent = state.revealAmount;
+    btnBatchDec.disabled = state.revealAmount <= MIN_BATCH || state.batchBusy;
+    btnBatchInc.disabled = state.revealAmount >= MAX_BATCH || state.batchBusy;
+  }
+
+  function updateScorePill(){
+    scoreText.textContent = `Accuracy ${state.score.correct} / ${state.score.total}`;
+    scorePill.classList.remove('hidden');
+    scorePill.classList.add('sm:flex');
+  }
+
+  function startSimulation(){
+    document.getElementById('tag-trend').textContent = trendLabels[prefs.trend];
+    document.getElementById('tag-timeframe').textContent = prefs.timeframe;
+    document.getElementById('tag-complexity').textContent = complexityLabels[prefs.complexity];
+
+    state.candles = generateCandles(prefs.trend, prefs.complexity, POOL_SIZE);
+    state.revealed = 0;
+    state.phase = 'context';
+    state.decision = null;
+    state.score = { correct:0, total:0 };
+    state.revealAmount = MIN_BATCH;
+
+    state.capital = prefs.capital;
+    state.balance = prefs.capital;
+    state.investStep = INVEST_STEP_MAP[prefs.capital] || Math.max(5, Math.round(prefs.capital*0.05));
+    state.investAmount = clampInvest(Math.round(prefs.capital * 0.25));
+    state.lockedInvest = 0;
+    state.rankIndex = rankIndexFor(state.balance, state.capital);
+
+    setTradeButtonsEnabled(false);
+    decisionTag.classList.add('hidden');
+    highlightDecision(null);
+    feedbackWrap.innerHTML = '';
+    feedbackWrap.appendChild(feedbackPlaceholder);
+    hint.textContent = `Choose a reveal size, then uncover the first candles to get oriented.`;
+    updateScorePill();
+    updateBatchControls();
+    updateWalletPill();
+    updateInvestControls();
+    updateNextButton();
+
+    screenPrefs.classList.add('opacity-0');
+    setTimeout(()=>{
+      screenPrefs.classList.add('hidden');
+      screenSim.classList.remove('hidden');
+      // canvas parent was display:none until now, so it had zero size —
+      // size it only once it's actually visible in the layout.
+      requestAnimationFrame(()=>{
+        screenSim.classList.remove('opacity-0');
+        resizeCanvas();
+      });
+    }, 260);
+  }
+
+  const BASE_ANIM_MS = 300;   // per-candle grow animation duration at MIN_BATCH size
+  const BASE_STAGGER_MS = 70; // delay between candles in a cascade at MIN_BATCH size
+
+  function revealCandle(onDone){
+    if(state.revealed >= state.candles.length) return;
+    state.revealed++;
+    state.animating = true;
+    state.animT0 = performance.now();
+    state._onAnimEnd = onDone || null;
+    requestAnimationFrame(drawChart);
+  }
+
+  // Reveals up to `n` candles in a cascading sequence, calling onAllDone(count)
+  // once the whole batch has landed (count may be fewer than requested if the
+  // pool is running low). Larger reveal sizes play faster: a 50-candle reveal
+  // animates and cascades 10x quicker than a 5-candle reveal.
+  function revealBatch(n, onAllDone){
+    state.batchBusy = true;
+    const speedFactor = Math.max(1, n / MIN_BATCH);
+    state.animDuration = Math.max(24, BASE_ANIM_MS / speedFactor);
+    state.stagger = Math.max(6, BASE_STAGGER_MS / speedFactor);
+    updateNextButton();
+    updateBatchControls();
+    const willReveal = Math.min(n, state.candles.length - state.revealed);
+    state.lastBatchCount = willReveal;
+    let remaining = willReveal;
+    function step(){
+      if(remaining <= 0){
+        state.batchBusy = false;
+        onAllDone && onAllDone(willReveal);
+        updateNextButton();
+        updateBatchControls();
+        return;
+      }
+      remaining--;
+      revealCandle(()=>{ setTimeout(step, state.stagger); });
+    }
+    step();
+  }
+
+  function afterContextBatch(){
+    state.phase = 'await-decision';
+    setTradeButtonsEnabled(true);
+    hint.textContent = `Make your prediction for the next stretch of candles.`;
+    updateNextButton();
+    updateInvestControls();
+  }
+
+  function lockDecision(decision){
+    if(state.phase !== 'await-decision') return;
+    if(state.balance <= 0) return;
+    state.decision = decision;
+    state.lockedInvest = state.investAmount;
+    playClick();
+    setTradeButtonsEnabled(false);
+    highlightDecision(decision);
+    decisionTag.classList.remove('hidden');
+    const labelMap = { buy:'BUY', sell:'SELL', hold:'HOLD' };
+    decisionTagText.innerHTML = `Locked in <span class="font-semibold text-white/90">${labelMap[decision]}</span> risking <span class="font-semibold text-white/90">🪙 ${state.lockedInvest}</span> — tap <span class="text-white/80 font-medium">Reveal Next ${state.revealAmount}</span> to see the outcome`;
+    state.phase = 'await-next';
+    hint.textContent = `Reveal the next ${state.revealAmount} candles to see the outcome.`;
+    updateNextButton();
+    updateInvestControls();
+  }
+
+  function undoDecision(){
+    if(state.phase !== 'await-next' || state.batchBusy || state.animating) return;
+    playClick();
+    state.decision = null;
+    state.lockedInvest = 0;
+    highlightDecision(null);
+    decisionTag.classList.add('hidden');
+    setTradeButtonsEnabled(true);
+    state.phase = 'await-decision';
+    hint.textContent = `Make your prediction for the next stretch of candles.`;
+    updateNextButton();
+    updateInvestControls();
+  }
+
+  function highlightDecision(decision){
+    [btnBuy, btnSell, btnHold].forEach(b => b.classList.remove('ring-2','ring-white/60'));
+    const map = { buy: btnBuy, sell: btnSell, hold: btnHold };
+    if(decision && map[decision]){ map[decision].classList.add('ring-2','ring-white/60'); }
+  }
+
+  function afterTradeBatch(revealedCount){
+    const batch = state.candles.slice(state.revealed - revealedCount, state.revealed);
+    const summary = summarizeBatch(batch);
+    const actual = classifyBatch(summary, prefs.complexity);
+    const decision = state.decision;
+    const tip = buildTip(decision, actual, summary);
+
+    state.score.total++;
+    if(tip.correct) state.score.correct++;
+    updateScorePill();
+
+    // Settle the wager: win the staked amount back as profit, or lose the stake.
+    const invested = state.lockedInvest;
+    const coinDelta = tip.correct ? invested : -invested;
+    state.balance = Math.max(0, state.balance + coinDelta);
+
+    const prevRankIndex = state.rankIndex;
+    state.rankIndex = rankIndexFor(state.balance, state.capital);
+    const rankChange = state.rankIndex === prevRankIndex ? null : (state.rankIndex > prevRankIndex ? 'up' : 'down');
+
+    updateWalletPill();
+
+    if(tip.correct){ playChime(); } else { playThud(); }
+    if(rankChange === 'up'){ setTimeout(playRankUp, 260); }
+    else if(rankChange === 'down'){ setTimeout(playRankDown, 260); }
+
+    renderFeedback(tip, decision, actual, coinDelta, rankChange, prevRankIndex);
+
+    decisionTag.classList.add('hidden');
+    state.decision = null;
+    state.lockedInvest = 0;
+    highlightDecision(null);
+
+    const bankrupt = state.balance <= 0;
+
+    if(bankrupt || state.revealed >= state.candles.length){
+      state.phase = 'finished';
+      hint.textContent = bankrupt ? 'Out of trade coins — scenario over.' : 'Scenario complete.';
+      setTradeButtonsEnabled(false);
+      renderSummary(bankrupt);
+    } else {
+      state.phase = 'await-decision';
+      setTradeButtonsEnabled(true);
+      state.investAmount = clampInvest(state.investAmount);
+      hint.textContent = `Make your prediction for the next stretch of candles.`;
+    }
+    updateNextButton();
+    updateInvestControls();
+  }
+
+  function renderFeedback(tip, decision, actual, coinDelta, rankChange, prevRankIndex){
+    const colorClass = tip.correct ? 'glow-text-bull' : 'glow-text-bear';
+    const borderColor = tip.correct ? 'rgba(60,255,155,0.35)' : 'rgba(255,62,108,0.35)';
+    const icon = tip.correct
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12.5L10 17.5L19 6.5" stroke="#3CFF9B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="#FF3E6C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    const deltaClass = coinDelta >= 0 ? 'glow-text-bull' : 'glow-text-bear';
+    const deltaSign = coinDelta >= 0 ? '+' : '−';
+    const coinRow = `
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
+        <span class="text-[10px] uppercase tracking-wider text-white/35">Coins</span>
+        <span class="text-sm font-semibold ${deltaClass}">${deltaSign}🪙 ${Math.abs(coinDelta)}</span>
+      </div>
+    `;
+
+    let rankRow = '';
+    if(rankChange){
+      const rankUpText = rankChange === 'up';
+      const rankClass = rankUpText ? 'glow-text-bull' : 'glow-text-bear';
+      const arrow = rankUpText ? '↑' : '↓';
+      rankRow = `
+        <div class="flex items-center justify-between mt-2">
+          <span class="text-[10px] uppercase tracking-wider text-white/35">Rank</span>
+          <span class="text-xs font-semibold ${rankClass}">${RANKS[prevRankIndex]} ${arrow} ${RANKS[state.rankIndex]}</span>
+        </div>
+      `;
+    }
+
+    feedbackWrap.innerHTML = `
+      <div class="pop-in glass-tight rounded-2xl p-4" style="border-color:${borderColor}">
+        <div class="flex items-center gap-2 mb-2">
+          ${icon}
+          <span class="text-sm font-semibold ${colorClass}">${tip.title}</span>
+        </div>
+        <p class="text-xs leading-relaxed text-white/65">${tip.text}</p>
+        ${coinRow}
+        ${rankRow}
+        <div class="mt-3 pt-3 border-t border-white/10 text-[10px] uppercase tracking-wider text-white/35">
+          Pro Tip
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSummary(bankrupt){
+    const pctScore = state.score.total ? Math.round(state.score.correct/state.score.total*100) : 0;
+    const netCoins = state.balance - state.capital;
+    const netClass = netCoins >= 0 ? 'glow-text-bull' : 'glow-text-bear';
+    const netSign = netCoins >= 0 ? '+' : '−';
+    const wrap = document.createElement('div');
+    wrap.className = 'pop-in glass-tight rounded-2xl p-5 mt-3 text-center';
+    wrap.innerHTML = `
+      ${bankrupt ? '<div class="text-xs glow-text-bear font-semibold mb-3">Out of trade coins</div>' : ''}
+      <div class="text-[11px] uppercase tracking-wider text-white/40 mb-1">Final Result</div>
+      <div class="text-3xl font-bold glow-text-gold mb-1">${pctScore}%</div>
+      <div class="text-xs text-white/50 mb-4">${state.score.correct} of ${state.score.total} reads correct</div>
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-white/35">Balance</div>
+          <div class="text-lg font-semibold text-white/90">🪙 ${state.balance}</div>
+          <div class="text-[11px] font-medium ${netClass}">${netSign}🪙 ${Math.abs(netCoins)}</div>
+        </div>
+        <div class="w-px h-10 bg-white/10"></div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-white/35">Rank</div>
+          <div class="text-lg font-semibold glow-text-gold">${RANKS[state.rankIndex]}</div>
+        </div>
+      </div>
+      <button id="btn-again" class="btn btn-primary w-full rounded-2xl py-3 text-sm font-semibold text-[#FFE9B3]">Run Another Scenario</button>
+    `;
+    feedbackWrap.appendChild(wrap);
+    document.getElementById('btn-again').addEventListener('click', ()=>{
+      playClick();
+      goToPrefs();
+    });
+  }
+
+  function goToPrefs(){
+    screenSim.classList.add('opacity-0');
+    setTimeout(()=>{
+      screenSim.classList.add('hidden');
+      screenPrefs.classList.remove('hidden');
+      requestAnimationFrame(()=>{ screenPrefs.classList.remove('opacity-0'); });
+    }, 260);
+  }
+
+  btnStart.addEventListener('click', ()=>{ playClick(); startSimulation(); });
+  btnRestart.addEventListener('click', ()=>{ playClick(); goToPrefs(); });
+
+  btnNext.addEventListener('click', ()=>{
+    if(btnNext.disabled || state.animating || state.batchBusy) return;
+    playPop();
+    if(state.phase === 'context'){
+      revealBatch(state.revealAmount, afterContextBatch);
+    } else if(state.phase === 'await-next'){
+      revealBatch(state.revealAmount, afterTradeBatch);
+    }
+  });
+
+  btnBatchDec.addEventListener('click', ()=>{
+    if(btnBatchDec.disabled) return;
+    state.revealAmount = Math.max(MIN_BATCH, state.revealAmount - BATCH_STEP);
+    playClick();
+    updateBatchControls();
+    updateNextButton();
+  });
+  btnBatchInc.addEventListener('click', ()=>{
+    if(btnBatchInc.disabled) return;
+    state.revealAmount = Math.min(MAX_BATCH, state.revealAmount + BATCH_STEP);
+    playClick();
+    updateBatchControls();
+    updateNextButton();
+  });
+
+  btnBuy.addEventListener('click', ()=> lockDecision('buy'));
+  btnSell.addEventListener('click', ()=> lockDecision('sell'));
+  btnHold.addEventListener('click', ()=> lockDecision('hold'));
+  btnChangeDecision.addEventListener('click', undoDecision);
+
+  btnInvestDec.addEventListener('click', ()=>{
+    if(btnInvestDec.disabled) return;
+    state.investAmount = clampInvest(state.investAmount - state.investStep);
+    playClick();
+    updateInvestControls();
+  });
+  btnInvestInc.addEventListener('click', ()=>{
+    if(btnInvestInc.disabled) return;
+    state.investAmount = clampInvest(state.investAmount + state.investStep);
+    playClick();
+    updateInvestControls();
+  });
+  investPresets.querySelectorAll('button[data-pct]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(btn.disabled) return;
+      const pct = parseFloat(btn.dataset.pct);
+      state.investAmount = clampInvest(state.balance * pct);
+      playClick();
+      updateInvestControls();
+    });
+  });
+
+  // initial sizing
+  updateBatchControls();
+  resizeCanvas();
+})();
+</script>
+</body>
+</html>
